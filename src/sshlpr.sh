@@ -45,5 +45,18 @@ fi
 echo Doing su $localuser -c "ssh -q ${user}@$server lpr -P $printer -#$4" >&2
 
 # Has CUPS given us a file in $6?
-cat $6 | su $localuser -c "ssh -q ${user}@$server lpr -P $printer -#$4" || exit 1
+cat $6 | su $localuser -c "ssh -q ${user}@$server lpr -P $printer -#$4"
+
+query_user() {
+	## xterm will be run as root...
+	DISPLAY="$(sshlpr_query localuser)" xterm -e bash \
+"echo Logging in to ${server}
+echo cat $6 \"|\" su $localuser -c \"ssh -q ${user}@${server} lpr -P $printer -#$4\"
+cat $6 | su $localuser -c \"ssh -q ${user}@${server} lpr -P $printer -#$4\""
+	
+}
+
+# failed -- try with user login on the correct X terminal
+$? || query_user "$1" "$2" "$3" "$4" "$5" "$6"
+
 exit 0
