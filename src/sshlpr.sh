@@ -18,9 +18,15 @@ then
 	exit 0
 fi
 
+dolog() {
+	echo "$(date) $@" >> /tmp/sshlpr.log
+}
+
 # If we get the correct number of arguments, as per:
 # 	$1=job-id $2=user $3=title $4=copies $5=options $6=[file]
 [ $# -lt 5 -o $# -gt 6 ] && exit 1
+
+dolog "$@"
 
 # Parse URL
 user=$2
@@ -42,21 +48,28 @@ then
 	user="`echo $user | cut -f 2 -d ':' `"
 fi
 
+dolog Doing su $localuser -c "ssh -q ${user}@$server lpr -P $printer -#$4"
 echo Doing su $localuser -c "ssh -q ${user}@$server lpr -P $printer -#$4" >&2
 
 # Has CUPS given us a file in $6?
-cat $6 | su $localuser -c "ssh -q ${user}@$server lpr -P $printer -#$4"
+#cat $6 | su $localuser -c "ssh -q ${user}@$server lpr -P $printer -#$4"
 
 query_user() {
+	whoami >&2
 	## xterm will be run as root...
-	DISPLAY="$(sshlpr_query localuser)" xterm -e bash \
+	DISPLAY="$(/usr/local/bin/sshlpr_query $localuser)" su $localuser 'xterm -e bash \
 "echo Logging in to ${server}
-echo cat $6 \"|\" su $localuser -c \"ssh -q ${user}@${server} lpr -P $printer -#$4\"
-cat $6 | su $localuser -c \"ssh -q ${user}@${server} lpr -P $printer -#$4\""
+echo cat $6 \"|\" su $localuser -c \"ssh -q ${user}@${server} cat\""'
+#	DISPLAY="$(sshlpr_query localuser)" xterm -e bash \
+#"echo Logging in to ${server}
+#echo cat $6 \"|\" su $localuser -c \"ssh -q ${user}@${server} lpr -P $printer -#$4\"
+#cat $6 | su $localuser -c \"ssh -q ${user}@${server} lpr -P $printer -#$4\""
 	
 }
 
 # failed -- try with user login on the correct X terminal
-$? || query_user "$1" "$2" "$3" "$4" "$5" "$6"
+dolog query_user "$1" "$2" "$3" "$4" "$5" "$6"
+output="$(query_user "$1" "$2" "$3" "$4" "$5" "$6" 2>&1)"
+dolog "$output"
 
 exit 0

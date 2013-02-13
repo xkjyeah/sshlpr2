@@ -1,3 +1,20 @@
+/*
+This file is part of sshlpr2.
+
+    sshlpr2 is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Foobar is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Foobar.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/types.h>
@@ -150,11 +167,10 @@ int main(int argc, char *argv[]) {
 		return 1;
 	}
 	
-	while ( read_bytes = read(contents_fd, buf, 4096) ) {
-		writeint( fifo_fd, read_bytes );
+	while ( (read_bytes = read(contents_fd, buf, 4096)) > 0 ) {
+//		writeint( fifo_fd, read_bytes );
 		write( fifo_fd, buf, read_bytes );
 	}
-	writeint( fifo_fd, 0 ); // terminate
 
 	if (argc == 7) {
 		free(fifoname);

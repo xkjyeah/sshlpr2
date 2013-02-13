@@ -1,29 +1,118 @@
+/*
+This file is part of sshlpr2.
+
+    sshlpr2 is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Foobar is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Foobar.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <cstdlib>
 #include <pwd.h>
 #include <unistd.h>
 #include <string>
+#include <cstdio>
+#include <cstdlib>
 #include <map>
+#include "data.h"
 #include <sstream>
 #include <iostream>
-
-
-#ifndef SSHLPRD_SOCKPATH
-#define SSHLPRD_SOCKPATH "/tmp/sshlprd.sock"
-#endif
+#include <fcntl.h>
+#include <csignal>
+#include <errno.h>
 
 using namespace std;
-/*
 
-main loop:
-	receive request to map user to X server
-	map user to X server
+int conn_sock = 0;
 
-	*/
+void on_int(int c) {
+	if (conn_sock)
+		close(conn_sock);
+	unlink(SSHLPRD_SOCKPATH);
+	exit(1);
+}
 
-map<string, string> user_xserver;
+// returns the input fd of the spawned process
+int start_helper(string &server, string &num_copies, string &lpr_options, string &fifo_path, string &user, char **p_fifoname ) {
+
+	// drop euid back to real user's id
+	// start the helper
+	
+	int usr_id = getuid();
+	
+	char default_helper[] = "sshlpr_helper";
+	char *helper = default_helper;
+	
+	int lp_uid = geteuid();
+	int usr_uid = getuid();
+	
+	setuid(usr_uid); // call the process and set up fifos as the real user
+
+	// make a fifo -- as the real user
+	char *fifoname;
+	for (int i=0; i<5; i++) {
+		fifoname = tempnam(NULL, "lpf");
+	
+		if (fifoname == NULL) {
+			cerr << "ERROR: Could not generate FIFO" << endl;
+			exit(1);
+		}
+	
+		if (! mkfifo( fifoname, 0644) )
+			break;
+	
+		free(fifoname);
+	}
+	
+	// restore to privileged uid
+	setuid(lp_uid);
+	cerr << "LP UID: " << getuid() << endl;
+	
+	// fork the process
+	int pid = fork();
+	
+	if (pid == -1) {
+		cerr << "Error spawning helper process" << endl;
+		exit(1);
+	}
+	
+	cerr << "pid " << pid << endl;
+	if (pid == 0) { // child process
+		setuid(usr_uid); // call the process and set up fifos as the real user
+		
+		char default_helper[] = "sshlpr_helper";
+		char *helper = getenv("SSHLPR_HELPER");
+		
+		if ( !helper ) helper = default_helper;
+		
+		execlp(helper, "sshlpr_helper", server.c_str(), num_copies.c_str(), lpr_options.c_str(), fifoname, user.c_str(), NULL);
+		
+		cerr << "exec failed: " << errno << endl;
+		
+		exit(1);
+	}
+
+	// open FIFO as real user
+	setuid(usr_uid);
+	int fifo_fd = open(fifoname, O_WRONLY);
+	setuid(lp_uid);
+	// parent process
+	cerr << "Opened fifo " << fifoname << endl;	
+	p_fifoname = &fifoname;
+	return fifo_fd; // return write end
+}
 
 int main() {
 
@@ -51,37 +140,84 @@ int main() {
 		return 1;
 	}
 
+	conn_sock = sock;
+
 	int fd;
 	socklen_t addrlen;
 
 	stringstream ss;
 	struct passwd *user_details = getpwuid(getuid());
 	char blank = 0;
-	char *xserver = getenv("DISPLAY");
 
 	if (user_details == NULL) {
 		cerr << "Unable to discover user details" << endl;
 		return 1;
 	}
-	if (xserver == NULL) {
-		cerr << "Warning: DISPLAY environment variable is not set. Mapping will be unset." << endl;
-		xserver = &blank;
-	}
-
-	size_t dtlen;
-	int action = 1;
 	
-	// include the null byte because it is our delimiter
-	write(sock, &(action = 1), sizeof(int));
-	write(sock, &(dtlen = strlen(user_details->pw_name)), sizeof(size_t));
-	write(sock, user_details->pw_name, dtlen);
-	write(sock, &(dtlen = strlen(xserver)), sizeof(size_t));
-	write(sock, xserver, dtlen);
-
-	// now write to the socket
-	if (result == -1) {
-		cerr << "Write to socket failed" << endl;
-		return 1;
+	size_t dtlen;
+	int action;
+	
+	writeint(sock, 7);
+	writestring(sock, user_details->pw_name); // identify ourselves
+	
+	while ( action = readint(sock) ) {
+	
+		cerr << "action" << action << endl;
+		string server, num_copies, lpr_options, fifo_path, user;
+		int fifo_fd;
+		char buf[4096];
+		
+		if (action == 2) {
+			server = readstring(sock);
+			num_copies = readstring(sock);
+			lpr_options = readstring(sock);
+			fifo_path = readstring(sock);
+			user = readstring(sock);
+			
+			// print to shell to be managed by script
+			cout << server << endl
+				<< num_copies << endl
+				<< lpr_options << endl
+				<< fifo_path << endl
+				<< user << endl;
+				
+			writeint(sock, 6);
+			writeint(sock, 0);
+			writestring(sock, "");
+			
+			fifo_fd = open(fifo_path.c_str(), O_RDONLY);
+			
+			char *fifoname;
+			int proc_fd = start_helper( server, num_copies, lpr_options, fifo_path, user, &fifoname );
+			int result;
+			
+			while ( result = read( fifo_fd, buf, 4096 ) ) {
+				int len;
+				
+				if (result < 0) {
+					cerr << "Error while reading to pipe: " << errno << endl;
+					exit(1);
+				}
+				
+				result = write( proc_fd, buf, result );
+				
+				if (result < 0) {
+					cerr << "Error while writing to pipe: " << errno << endl;
+					exit(1);
+				}
+			}
+			
+			close(proc_fd);
+			close(fifo_fd);
+			unlink(fifo_path.c_str());
+			unlink(fifoname);
+			
+			cerr << "Finished print job" << endl;
+		}
+		else {
+			cerr << "Unknown action received: " << action << endl;
+			return -1;
+		}
 	}
 
 	close(sock);

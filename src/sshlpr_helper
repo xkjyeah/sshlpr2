@@ -1,0 +1,43 @@
+#!/bin/bash
+
+# $1=server $2=numcopies $3=options $4=fifo $5=user
+
+
+server="`echo $1 | cut -f 3 -d /`"
+printer="`echo $1 | cut -f 4 -d /`"
+
+if echo $server | grep '@' > /dev/null 2> /dev/null
+then
+	user="`echo $server | cut -f 1 -d '@' `"
+	server="`echo $server | cut -f 2 -d '@' `"
+fi
+
+if echo $user | grep ':' > /dev/null 2> /dev/null
+then
+	localuser="`echo $user | cut -f 1 -d ':' `"
+	user="`echo $user | cut -f 2 -d ':' `"
+fi
+
+
+#TODO handle options
+
+# build the ssh line
+CMDLINE="ssh -q ${user}@$server 'lpr -P $printer -#$2"
+
+#for opt in $3
+#do
+#	CMDLINE="$CMDLINE -o $opt "
+#done
+
+CMDLINE="$CMDLINE;
+echo $? ; sleep 10'"
+
+echo $CMDLINE
+
+#xterm -e bash -c "echo Logging in to ${server};
+#cat $4 | ssh -q ${user}@$server lpr -P $printer -#$2"
+xterm -e bash -c "echo Logging in to ${server};
+cat $4 | $CMDLINE "
+
+rm $4 # delete the FIFO, for good measure
+

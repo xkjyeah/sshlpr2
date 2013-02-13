@@ -1,0 +1,80 @@
+sshlpr2
+
+INTRODUCTION
+
+When your printer is connected to your SSH server, but not to you, you can
+use sshlpr2 to create a CUPS printer that behaves like a remote server.
+
+Similar work was done by Andre Masella. His original sshlpr script can be
+found at
+
+http://www.masella.name/technical/sshlpr.html
+
+The original version of sshlpr has two problems:
+
+(1) Requires your SSH server to accept public key authentication. Password
+authentication will certainly fail, because when ssh is run by CUPS it
+is not able to open a terminal.
+
+(2) Requires CUPS to run su, which will also fail because CUPS is not
+connected to a terminal.
+
+To avoid the su problems, sshlpr2 has a simple server daemon that accepts
+jobs submitted to it (via the sshlpr backend) and forwards the jobs to
+clients attached to it (via sshlpr_client).
+
+sshlpr_client can be run in an X environment, so that you can launch xterm
+and key in your password. sshlpr_client is setuid lp, in order to allow you
+to connect to sshlprd.
+
+INSTALLATION
+
+On a regular Ubuntu system, type:
+
+$ ./configure; make; sudo make install
+
+If you are on other Linux/Mac system, have a look at the configure options
+specific to sshlpr2:
+
+  --with-cups-backend     CUPS backend directory, e.g. /usr/lib/cups/backend
+  --with-socket-dir       Socket directory, e.g. /var/sshlpr
+  --with-lpuser           Username to setuid the CUPS backend and client
+
+HOW IT WORKS
+
+0. Initialization
+	a) sshlprd is running.
+	b) Some user runs sshlpr_client, which connects to sshlprd
+
+1. sshlpr
+	a) Creates a FIFO in /tmp
+	b) Submits job request to sshlprd
+
+2. sshlpr_client
+	a) Receives the job request from sshlprd
+	b) Executes sshlpr_helper, passing parameters from the job request
+		to sshlpr_helper
+
+3. sshlpr_helper
+	a) Reads the parameters
+	b) Starts an xterm process that:
+		i]   Reads from the FIFO, and pipes the output to...
+		ii]  ... an ssh process that runs the ...
+		iii] ... lpr process on the remote end
+
+HOW TO USE IT
+
+After installation, create a printer based on the sshlpr2 backend on
+
+sshlpr://abc123@linux.pwf.cam.ac.uk/Pem_CC_1_BW
+
+Unlike the original sshlpr, the local user does not have to be specified,
+because you will always execute ssh as the user that created the print job.
+
+SPECIAL NOTE TO UNIVERSITY OF CAMBRIDGE USERS
+
+To discover your list of printers:
+
+	ssh <CRSID>@linux.pwf.cam.ac.uk 'lpstat -P -a'
+
+

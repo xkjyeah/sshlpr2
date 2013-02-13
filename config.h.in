@@ -33,6 +33,9 @@
 /* Define to 1 if you have the <unistd.h> header file. */
 #undef HAVE_UNISTD_H
 
+/* User to run sshlprd as */
+#undef LPUSER
+
 /* Name of package */
 #undef PACKAGE
 
@@ -53,6 +56,9 @@
 
 /* Define to the version of this package. */
 #undef PACKAGE_VERSION
+
+/* Path to socket */
+#undef SSHLPRD_SOCKPATH
 
 /* Define to 1 if you have the ANSI C header files. */
 #undef STDC_HEADERS
