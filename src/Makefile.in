@@ -565,7 +565,7 @@ install-exec-hook:
 
 install-exec-local:
 	echo "#### INSTALLING sshlpr ####"
-	echo $(INSTALL_DATA) sshlpr $(DESTDIR)$(CUPS_BACKEND)/sshlpr
+	$(INSTALL_PROGRAM) sshlpr $(DESTDIR)$(CUPS_BACKEND)/sshlpr
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

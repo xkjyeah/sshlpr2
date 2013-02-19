@@ -48,8 +48,10 @@ int main(int argc, char *argv[]) {
 	char *user = strdup(argv[2]);
 	char *localuser = user;
 	
-	if (getenv("DEVICE_URI") == NULL)
+	if (getenv("DEVICE_URI") == NULL) {
+		cerr << "ERROR: DEVICE_URI was not provided in the environment" << endl;
 		return 1;
+	}
 	
 	char *device_uri = strdup(getenv("DEVICE_URI"));
 	
@@ -86,7 +88,7 @@ int main(int argc, char *argv[]) {
 
 	result = connect(sock, (struct sockaddr*)&sock_addr, sizeof(struct sockaddr_un));
 	if (result == -1) {
-		cerr << "ERROR: Unable to connect to pathname "
+		cerr << "ERROR: Unable to connect to socket on "
 			<< SSHLPRD_SOCKPATH
 			<< endl;
 		return 1;

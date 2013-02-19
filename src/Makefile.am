@@ -24,6 +24,6 @@ install-exec-hook:
 
 install-exec-local:
 	echo "#### INSTALLING sshlpr ####"
-	echo $(INSTALL_DATA) sshlpr $(DESTDIR)$(CUPS_BACKEND)/sshlpr
+	$(INSTALL_PROGRAM) sshlpr $(DESTDIR)$(CUPS_BACKEND)/sshlpr
 
 
